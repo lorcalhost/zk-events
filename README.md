@@ -15,7 +15,7 @@ The zkApp also generates a ticket QR code containing merkle tree data that can b
 - [x] Event generation with whitelist
 - [x] Ticket claiming if in whitelist
 - [ ] Gameify console interaction
-- [ ] Limits on total number of tickets and claimable per user
+- [x] Limits on total number of tickets and claimable per user and in total
 - [ ] Prove ticket ownership
 - [ ] Allow users to trade tickets before the event
 - [x] QR code generation
