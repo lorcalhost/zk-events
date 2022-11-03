@@ -53,21 +53,17 @@ class Account extends CircuitValue {
   }
 
   removeTicket(n: number): Account {
-    if (this.tickets.lt(new UInt32(n))) {
-      throw new Error('underflow');
-    }
+    this.tickets.assertGte(UInt32.fromNumber(n));
     return new Account(this.publicKey, this.tickets.sub(n));
   }
-
-  // nOfTickets(): UInt32 {
-  //   return this.tickets;
-  // }
 }
 
 let initialCommitment: Field = Field.zero;
 
 class ZKEvent extends SmartContract {
   @state(Field) commitment = State<Field>();
+  @state(UInt32) ticketsClaimed = State<UInt32>();
+  @state(UInt32) maxTickets = State<UInt32>();
 
   deploy(args: DeployArgs) {
     super.deploy(args);
@@ -77,27 +73,41 @@ class ZKEvent extends SmartContract {
     });
     this.balance.addInPlace(UInt64.fromNumber(initialBalance));
     this.commitment.set(initialCommitment);
+    this.ticketsClaimed.set(UInt32.fromNumber(0));
+    this.maxTickets.set(UInt32.fromNumber(maxTicketsPerEvent));
   }
 
   @method
   claimTicket(account: Account, path: MerkleWitness) {
+    // CHECKS
     let commitment = this.commitment.get();
     this.commitment.assertEquals(commitment);
 
-    // check that account is within the committed Merkle Tree (or whitelist)
+    let ticketsClaimed = this.ticketsClaimed.get();
+    this.ticketsClaimed.assertEquals(ticketsClaimed);
+
+    let maxTickets = this.maxTickets.get();
+    this.maxTickets.assertEquals(maxTickets);
+
+    // check that account is within the committed Merkle Tree (whitelist)
     path.calculateRoot(account.hash()).assertEquals(commitment);
 
-    //!TODO: check if already has already maximum allowed number of tickets per person via builtin const
+    // check if more tickets are available
+    ticketsClaimed.assertLt(maxTickets);
+
+    // check if user already has max number of tickets
     account.tickets.assertLt(UInt32.fromNumber(maxNumberOfTicketsPerAccount));
 
-    //!TODO: check if already has already maximum allowed number of tickets per event
-
+    // UPDATE STATE
+    // add 1 ticket to account
     let newAccount = account.addTicket(1);
 
     // calculate new merkle root
     let newCommitment = path.calculateRoot(newAccount.hash());
-
     this.commitment.set(newCommitment);
+
+    // update number of claimed tickets
+    this.ticketsClaimed.set(ticketsClaimed.add(UInt32.fromNumber(1)));
   }
 }
 
