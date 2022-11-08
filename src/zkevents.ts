@@ -32,7 +32,7 @@ const rl = createInterface({
 await isReady;
 
 // enable if want interactive console
-const interactive = false;
+const interactive = true;
 // very slow on M1 macs if enabled
 const doProofs = false;
 
@@ -48,6 +48,7 @@ if (interactive) {
     await question('Insert number of tickets per account: ')
   );
   maxTicketsPerEvent = Number(await question('Insert max tickets per event: '));
+  await question('Press enter to claim your ticket 🎟️');
   rl.close();
 }
 
@@ -213,12 +214,12 @@ let tx = await Mina.transaction(feePayer, () => {
 });
 await tx.send();
 
-console.log('Alice initial tickets: ' + Accounts.get('Alice')?.tickets);
+console.log('Initial tickets: ' + Accounts.get('Alice')?.tickets);
 
-console.log('Alice is claiming a ticket..');
+console.log('Claiming a ticket..');
 await claimTicket('Alice', 0n);
 
-console.log('Alice final tickets: ' + Accounts.get('Alice')?.tickets);
+console.log('Successfully claimed ticket: ' + Accounts.get('Alice')?.tickets);
 
 setTimeout(shutdown, 0);
 
@@ -240,10 +241,8 @@ async function claimTicket(name: Names, index: bigint) {
   account.tickets = account.tickets.add(1);
   let accHash = account.hash();
   Tree.setLeaf(index, accHash);
-  console.log(accHash.toString());
   QRCode.toString(
-    //! TODO use useful data in QR code
-    accHash.toString(),
+    account.publicKey.toString(),
     { type: 'terminal' },
     function (err, url) {
       console.log(url);

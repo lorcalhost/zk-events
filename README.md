@@ -23,6 +23,8 @@ The zkApp also generates a ticket QR code containing data that can be used to pr
 - [x] QR code generation
 - [x] Separate into multiple files
 - [x] Write tests
+- [ ] Fix WL const handling
+- [ ] More concise tests
 
 ### V2
 
