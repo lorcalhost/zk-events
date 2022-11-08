@@ -2,31 +2,47 @@
 
 # ZK Events
 
-A Mina zkApp that allows users to create events, create a whitelist of people who can claim the tickets and lets people prove ticket ownership at the venue.
+A Mina zkApp that allows users to create events using a whitelist of people that can claim the tickets, and lets people prove ticket(s) ownership at the venue.
 
 ## General architecture description
 
-Each event has its own smart contract which stores a merkle root for the whitelist. The merkle tre is pre-setup with leaves for the whitelisted users. The merkle tree is updated whenever user claims a ticket. The smart contract also stores a merkle root for the current owners of the tickets.
-The zkApp also generates a ticket QR code containing merkle tree data that can be used to prove ownership at the venue.
+Each event has its own smart contract which stores a merkle root for the whitelist. The merkle tree is pre-setup with leaves for the whitelisted users. The merkle tree is updated whenever user claims or trades a ticket.
+The zkApp also generates a ticket QR code containing data that can be used to prove ownership at the venue.
 
 ## Progress
+
+### V1
 
 - [x] Figure out general architecture
 - [x] Event generation with whitelist
 - [x] Ticket claiming if in whitelist
-- [ ] Gameify console interaction
+- [x] Gameify console interaction
 - [x] Limits on total number of tickets and claimable per user and in total
-- [ ] Prove ticket ownership
-- [ ] Allow users to trade tickets before the event
+- [ ] Prove ticket ownership function
+- [ ] Allow users to trade tickets (WIP)
 - [x] QR code generation
-- [ ] QR code generation with merkle tree data
-- [ ] Scanner Program
+- [x] Separate into multiple files
+- [x] Write tests
+
+### V2
+
+- [ ] Hide more data
+- [ ] QR code with less identifiable data
+- [ ] Create verifier program to run at the event
 - [ ] Frontend
 
-## How to build
+## How to run
+
+Run in interactive mode:
 
 ```sh
-npm run zkevents
+npm run interactive
+```
+
+Run tests:
+
+```sh
+npm run test
 ```
 
 ## Useful Links
