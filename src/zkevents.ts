@@ -22,15 +22,34 @@ import {
 
 import QRCode from 'qrcode';
 
+import { createInterface } from 'readline';
+
+const rl = createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
 await isReady;
 
+// enable if want interactive console
+const interactive = false;
 // very slow on M1 macs if enabled
 const doProofs = false;
 
-//! TODO get from input and gameify
-const whitelistSize = 8;
-const maxNumberOfTicketsPerAccount = 2;
-const maxTicketsPerEvent = 100;
+let whitelistSize = 8;
+let maxNumberOfTicketsPerAccount = 2;
+let maxTicketsPerEvent = 100;
+
+if (interactive) {
+  const question = (questionText: string) =>
+    new Promise<string>((resolve) => rl.question(questionText, resolve));
+  whitelistSize = Number(await question('Insert whitelist size: '));
+  maxNumberOfTicketsPerAccount = Number(
+    await question('Insert number of tickets per account: ')
+  );
+  maxTicketsPerEvent = Number(await question('Insert max tickets per event: '));
+  rl.close();
+}
 
 class MerkleWitness extends Experimental.MerkleWitness(whitelistSize) {}
 
@@ -108,6 +127,41 @@ class ZKEvent extends SmartContract {
 
     // update number of claimed tickets
     this.ticketsClaimed.set(ticketsClaimed.add(UInt32.fromNumber(1)));
+  }
+
+  @method
+  sendTicket(
+    from: Account,
+    fromPath: MerkleWitness,
+    to: Account,
+    toPath: MerkleWitness
+  ) {
+    // CHECKS
+    let commitment = this.commitment.get();
+    this.commitment.assertEquals(commitment);
+
+    let ticketsClaimed = this.ticketsClaimed.get();
+    this.ticketsClaimed.assertEquals(ticketsClaimed);
+
+    // ensure both accounts are within whitelist
+    fromPath.calculateRoot(from.hash()).assertEquals(commitment);
+    toPath.calculateRoot(to.hash()).assertEquals(commitment);
+
+    // assert from has at least one ticket and to has less than max allowed tickets
+    from.tickets.assertGte(UInt32.fromNumber(1));
+    to.tickets.assertLt(UInt32.fromNumber(maxNumberOfTicketsPerAccount));
+
+    // UPDATE STATE
+    // add 1 ticket to account
+    let newFromAccount = from.removeTicket(1);
+    let newToAccount = to.addTicket(1);
+
+    // calculate new merkle root
+    //!TODO fix update merkle root
+    // let newCommitment = fromPath.calculateRoot(newFromAccount.hash());
+    // new MerkleWitness(newCommitment).calculateRoot(newToAccount.hash());
+    // newCommitment = newCommitment.calculateRoot(newFromAccount.hash());
+    // this.commitment.set(newCommitment);
   }
 }
 
