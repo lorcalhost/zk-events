@@ -1,4 +1,4 @@
-import { ZKEvent, Account } from './ZKEvent';
+import { ZKEvent, Account, whitelistSize } from './ZKEvent';
 import {
   SmartContract,
   isReady,
@@ -27,12 +27,10 @@ import QRCode from 'qrcode';
 
 type Names = 'Alice' | 'Bob' | 'Carol' | 'Dave';
 
-let whitelistSize = 8;
 let maxNumberOfTicketsPerAccount = 2;
 let maxTicketsPerEvent = 100;
 export const initialBalance = 10_000_000_000;
-// enable if want interactive console
-const interactive = false;
+
 // very slow on M1 macs if enabled
 const doProofs = false;
 // generate QR code in terminal
@@ -141,26 +139,72 @@ describe('ZKEvent', () => {
       if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
     });
     // very slow on M1 macs
-    // if (doProofs) {
-    //   await tx.prove();
-    // }
-    // await tx.send();
+    if (doProofs) {
+      await tx.prove();
+    }
+    await tx.send();
 
-    // // if the transaction was successful, we can update our off-chain storage as well
-    // account.tickets = account.tickets.add(1);
-    // let accHash = account.hash();
-    // Tree.setLeaf(index, accHash);
-    // console.log(accHash.toString());
-    // if (doQr) {
-    //   QRCode.toString(
-    //     account.publicKey.toString(),
-    //     { type: 'terminal' },
-    //     function (err, url) {
-    //       console.log(url);
-    //     }
-    //   );
-    // }
+    // if the transaction was successful, we can update our off-chain storage as well
+    account.tickets = account.tickets.add(1);
+    let accHash = account.hash();
+    Tree.setLeaf(index, accHash);
+    if (doQr) {
+      QRCode.toString(
+        account.publicKey.toString(),
+        { type: 'terminal' },
+        function (err, url) {
+          console.log(url);
+        }
+      );
+    }
 
-    // zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
+    zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
+    console.log('Alice final tickets: ' + Accounts.get('Alice')?.tickets);
+  });
+
+  it('can verify account owns a ticket', async () => {
+    const zkAppInstance = new ZKEvent(zkAppAddress);
+    await localDeploy(zkAppInstance, zkAppPrivateKey, deployerAccount);
+    const txn = await Mina.transaction(deployerAccount, () => {
+      zkAppInstance.setup(
+        initialCommitment,
+        UInt32.fromNumber(maxTicketsPerEvent),
+        UInt32.fromNumber(maxNumberOfTicketsPerAccount)
+      );
+      zkAppInstance.sign(zkAppPrivateKey);
+    });
+    await txn.send().wait();
+    let account = Accounts.get('Alice')!;
+    let index = 0n;
+    let w = Tree.getWitness(index);
+    let witness = new MerkleWitness(w);
+
+    let tx = await Mina.transaction(deployerAccount, () => {
+      zkAppInstance.claimTicket(account, witness);
+      if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
+    });
+    // very slow on M1 macs
+    if (doProofs) {
+      await tx.prove();
+    }
+    await tx.send();
+
+    // if the transaction was successful, we can update our off-chain storage as well
+    account.tickets = account.tickets.add(1);
+    let accHash = account.hash();
+    Tree.setLeaf(index, accHash);
+    if (doQr) {
+      QRCode.toString(
+        account.publicKey.toString(),
+        { type: 'terminal' },
+        function (err, url) {
+          console.log(url);
+        }
+      );
+    }
+
+    let root = zkAppInstance.commitment.get();
+    root.assertEquals(Tree.getRoot());
+    account.tickets.assertGte(UInt32.fromNumber(1));
   });
 });

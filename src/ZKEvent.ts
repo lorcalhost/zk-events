@@ -28,6 +28,10 @@ import {
 
 import { initialBalance } from './ZKEvent.test';
 
+export const whitelistSize = 256;
+
+export class MerkleWitness extends Experimental.MerkleWitness(whitelistSize) {}
+
 export class Account extends CircuitValue {
   @prop publicKey: PublicKey;
   @prop tickets: UInt32;
@@ -93,7 +97,7 @@ export class ZKEvent extends SmartContract {
   }
 
   @method
-  claimTicket(account: Account, path: BaseMerkleWitness) {
+  claimTicket(account: Account, path: MerkleWitness) {
     // CHECKS
     let commitment = this.commitment.get();
     this.commitment.assertEquals(commitment);
@@ -131,9 +135,9 @@ export class ZKEvent extends SmartContract {
   @method
   sendTicket(
     from: Account,
-    fromPath: BaseMerkleWitness,
+    fromPath: MerkleWitness,
     to: Account,
-    toPath: BaseMerkleWitness
+    toPath: MerkleWitness
   ) {
     // CHECKS
     let commitment = this.commitment.get();
