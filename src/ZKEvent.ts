@@ -21,11 +21,6 @@ import {
   AccountUpdate,
 } from 'snarkyjs';
 
-import {
-  MerkleTree,
-  BaseMerkleWitness,
-} from 'snarkyjs/dist/node/lib/merkle_tree.js';
-
 import { initialBalance } from './ZKEvent.test';
 
 export const whitelistSize = 256;
@@ -143,30 +138,29 @@ export class ZKEvent extends SmartContract {
     let commitment = this.commitment.get();
     this.commitment.assertEquals(commitment);
 
-    let ticketsClaimed = this.ticketsClaimed.get();
-    this.ticketsClaimed.assertEquals(ticketsClaimed);
-
     let maxTicketsPerAccount = this.maxTicketsPerAccount.get();
     this.maxTicketsPerAccount.assertEquals(maxTicketsPerAccount);
 
-    // ensure both accounts are within whitelist
+    // ensure first witness is correct
     fromPath.calculateRoot(from.hash()).assertEquals(commitment);
-    toPath.calculateRoot(to.hash()).assertEquals(commitment);
 
     // assert from has at least one ticket and to has less than max allowed tickets
     from.tickets.assertGte(UInt32.fromNumber(1));
     to.tickets.assertLt(maxTicketsPerAccount);
 
     // UPDATE STATE
-    // add 1 ticket to account
+    // remove 1 ticket from account
     let newFromAccount = from.removeTicket(1);
+
+    // ensure pre computation of second witness is correct
+    let tempCommitment = fromPath.calculateRoot(newFromAccount.hash());
+    toPath.calculateRoot(to.hash()).assertEquals(tempCommitment);
+
+    // add 1 ticket to account
     let newToAccount = to.addTicket(1);
 
     // calculate new merkle root
-    //!TODO fix update merkle root
-    // let newCommitment = fromPath.calculateRoot(newFromAccount.hash());
-    // new MerkleWitness(newCommitment).calculateRoot(newToAccount.hash());
-    // newCommitment = newCommitment.calculateRoot(newFromAccount.hash());
-    // this.commitment.set(newCommitment);
+    let newCommitment = toPath.calculateRoot(newToAccount.hash());
+    this.commitment.set(newCommitment);
   }
 }

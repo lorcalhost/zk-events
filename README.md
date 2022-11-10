@@ -18,13 +18,14 @@ The zkApp also generates a ticket QR code containing data that can be used to pr
 - [x] Ticket claiming if in whitelist
 - [x] Gameify console interaction
 - [x] Limits on total number of tickets and claimable per user and in total
-- [ ] Prove ticket ownership function
-- [ ] Allow users to trade tickets (WIP)
+- [x] Prove ticket ownership function
+- [x] Allow users to trade tickets
 - [x] QR code generation
 - [x] Separate into multiple files
 - [x] Write tests
 - [ ] Fix WL const handling
 - [ ] More concise tests
+- [ ] Add security feature and timestamp to `sendTicket`
 
 ### V2
 
