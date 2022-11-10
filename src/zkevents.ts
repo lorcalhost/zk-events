@@ -32,9 +32,11 @@ const rl = createInterface({
 await isReady;
 
 // enable if want interactive console
-const interactive = true;
+const interactive = false;
 // very slow on M1 macs if enabled
 const doProofs = false;
+// display QR code in terminal
+const doQr = true;
 
 let whitelistSize = 8;
 let maxNumberOfTicketsPerAccount = 2;
@@ -141,28 +143,27 @@ class ZKEvent extends SmartContract {
     let commitment = this.commitment.get();
     this.commitment.assertEquals(commitment);
 
-    let ticketsClaimed = this.ticketsClaimed.get();
-    this.ticketsClaimed.assertEquals(ticketsClaimed);
-
-    // ensure both accounts are within whitelist
+    // ensure first witness is correct
     fromPath.calculateRoot(from.hash()).assertEquals(commitment);
-    toPath.calculateRoot(to.hash()).assertEquals(commitment);
 
     // assert from has at least one ticket and to has less than max allowed tickets
     from.tickets.assertGte(UInt32.fromNumber(1));
     to.tickets.assertLt(UInt32.fromNumber(maxNumberOfTicketsPerAccount));
 
     // UPDATE STATE
-    // add 1 ticket to account
+    // remove 1 ticket from account
     let newFromAccount = from.removeTicket(1);
+
+    // ensure pre computation of second witness is correct
+    let tempCommitment = fromPath.calculateRoot(newFromAccount.hash());
+    toPath.calculateRoot(to.hash()).assertEquals(tempCommitment);
+
+    // add 1 ticket to account
     let newToAccount = to.addTicket(1);
 
     // calculate new merkle root
-    //!TODO fix update merkle root
-    // let newCommitment = fromPath.calculateRoot(newFromAccount.hash());
-    // new MerkleWitness(newCommitment).calculateRoot(newToAccount.hash());
-    // newCommitment = newCommitment.calculateRoot(newFromAccount.hash());
-    // this.commitment.set(newCommitment);
+    let newCommitment = toPath.calculateRoot(newToAccount.hash());
+    this.commitment.set(newCommitment);
   }
 }
 
@@ -215,11 +216,15 @@ let tx = await Mina.transaction(feePayer, () => {
 await tx.send();
 
 console.log('Initial tickets: ' + Accounts.get('Alice')?.tickets);
-
 console.log('Claiming a ticket..');
 await claimTicket('Alice', 0n);
-
-console.log('Successfully claimed ticket: ' + Accounts.get('Alice')?.tickets);
+console.log('Successfully claimed ticket.');
+console.log('Alice tickets: ' + Accounts.get('Alice')?.tickets);
+console.log('Bob tickets: ' + Accounts.get('Bob')?.tickets);
+console.log('Sending ticket to Bob..');
+await sendTicket('Alice', 0n, 'Bob', 1n);
+console.log('Alice tickets: ' + Accounts.get('Alice')?.tickets);
+console.log('Bob tickets: ' + Accounts.get('Bob')?.tickets);
 
 setTimeout(shutdown, 0);
 
@@ -241,12 +246,62 @@ async function claimTicket(name: Names, index: bigint) {
   account.tickets = account.tickets.add(1);
   let accHash = account.hash();
   Tree.setLeaf(index, accHash);
-  QRCode.toString(
-    account.publicKey.toString(),
-    { type: 'terminal' },
-    function (err, url) {
-      console.log(url);
-    }
-  );
+  if (doQr) {
+    QRCode.toString(
+      account.publicKey.toString(),
+      { type: 'terminal' },
+      function (err, url) {
+        console.log(url);
+      }
+    );
+  }
+  zkEventsZkApp.commitment.get().assertEquals(Tree.getRoot());
+}
+
+async function sendTicket(
+  nameFrom: Names,
+  indexFrom: bigint,
+  nameTo: Names,
+  indexTo: bigint
+) {
+  let fromAccount = Accounts.get(nameFrom)!;
+  let toAccount = Accounts.get(nameTo)!;
+
+  // compute from witness
+  let wFrom = Tree.getWitness(indexFrom);
+  let witnessFrom = new MerkleWitness(wFrom);
+
+  // compute to witness
+  let fromHash = new Account(
+    fromAccount.publicKey,
+    fromAccount.tickets.sub(1)
+  ).hash();
+  Tree.setLeaf(indexFrom, fromHash);
+  let wTo = Tree.getWitness(indexTo);
+  let witnessTo = new MerkleWitness(wTo);
+
+  // send transaction
+  let tx = await Mina.transaction(feePayer, () => {
+    zkEventsZkApp.sendTicket(fromAccount, witnessFrom, toAccount, witnessTo);
+    if (!doProofs) zkEventsZkApp.sign(zkappKey);
+  });
+  if (doProofs) {
+    await tx.prove();
+  }
+  await tx.send();
+
+  // if the transaction was successful, we can update our off-chain storage as well
+  fromAccount.tickets = fromAccount.tickets.sub(1);
+  toAccount.tickets = toAccount.tickets.add(1);
+  Tree.setLeaf(indexTo, toAccount.hash());
+  if (doQr) {
+    QRCode.toString(
+      toAccount.publicKey.toString(),
+      { type: 'terminal' },
+      function (err, url) {
+        console.log(url);
+      }
+    );
+  }
   zkEventsZkApp.commitment.get().assertEquals(Tree.getRoot());
 }

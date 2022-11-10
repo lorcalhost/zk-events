@@ -127,8 +127,6 @@ describe('ZKEvent', () => {
     });
     await txn.send().wait();
 
-    console.log('Alice initial tickets: ' + Accounts.get('Alice')?.tickets);
-    console.log('Alice is claiming a ticket..');
     let account = Accounts.get('Alice')!;
     let index = 0n;
     let w = Tree.getWitness(index);
@@ -159,10 +157,97 @@ describe('ZKEvent', () => {
     }
 
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
-    console.log('Alice final tickets: ' + Accounts.get('Alice')?.tickets);
   });
 
-  it('can verify account owns a ticket', async () => {
+  it('allows allows sending a ticket to another user', async () => {
+    const zkAppInstance = new ZKEvent(zkAppAddress);
+    await localDeploy(zkAppInstance, zkAppPrivateKey, deployerAccount);
+    const txn = await Mina.transaction(deployerAccount, () => {
+      zkAppInstance.setup(
+        initialCommitment,
+        UInt32.fromNumber(maxTicketsPerEvent),
+        UInt32.fromNumber(maxNumberOfTicketsPerAccount)
+      );
+      zkAppInstance.sign(zkAppPrivateKey);
+    });
+    await txn.send().wait();
+    let account = Accounts.get('Alice')!;
+    let index = 0n;
+    let w = Tree.getWitness(index);
+    let witness = new MerkleWitness(w);
+
+    let tx = await Mina.transaction(deployerAccount, () => {
+      zkAppInstance.claimTicket(account, witness);
+      if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
+    });
+    // very slow on M1 macs
+    if (doProofs) {
+      await tx.prove();
+    }
+    await tx.send();
+
+    // if the transaction was successful, we can update our off-chain storage as well
+    account.tickets = account.tickets.add(1);
+    let accHash = account.hash();
+    Tree.setLeaf(index, accHash);
+    if (doQr) {
+      QRCode.toString(
+        account.publicKey.toString(),
+        { type: 'terminal' },
+        function (err, url) {
+          console.log(url);
+        }
+      );
+    }
+
+    zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
+
+    // SEND TICKET
+    let fromAccount = Accounts.get('Alice')!;
+    let toAccount = Accounts.get('Bob')!;
+    let indexFrom = 0n;
+    let indexTo = 1n;
+
+    // compute from witness
+    let wFrom = Tree.getWitness(indexFrom);
+    let witnessFrom = new MerkleWitness(wFrom);
+
+    // compute to witness
+    let fromHash = new Account(
+      fromAccount.publicKey,
+      fromAccount.tickets.sub(1)
+    ).hash();
+    Tree.setLeaf(indexFrom, fromHash);
+    let wTo = Tree.getWitness(indexTo);
+    let witnessTo = new MerkleWitness(wTo);
+
+    // send transaction
+    tx = await Mina.transaction(deployerAccount, () => {
+      zkAppInstance.sendTicket(fromAccount, witnessFrom, toAccount, witnessTo);
+      if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
+    });
+    if (doProofs) {
+      await tx.prove();
+    }
+    await tx.send();
+
+    // if the transaction was successful, we can update our off-chain storage as well
+    fromAccount.tickets = fromAccount.tickets.sub(1);
+    toAccount.tickets = toAccount.tickets.add(1);
+    Tree.setLeaf(indexTo, toAccount.hash());
+    if (doQr) {
+      QRCode.toString(
+        toAccount.publicKey.toString(),
+        { type: 'terminal' },
+        function (err, url) {
+          console.log(url);
+        }
+      );
+    }
+    zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
+  });
+
+  it('can prove account owns a ticket', async () => {
     const zkAppInstance = new ZKEvent(zkAppAddress);
     await localDeploy(zkAppInstance, zkAppPrivateKey, deployerAccount);
     const txn = await Mina.transaction(deployerAccount, () => {
