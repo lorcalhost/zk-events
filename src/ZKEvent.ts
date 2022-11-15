@@ -1,7 +1,5 @@
 import {
   SmartContract,
-  isReady,
-  shutdown,
   Poseidon,
   Field,
   Experimental,
@@ -11,14 +9,11 @@ import {
   state,
   CircuitValue,
   PublicKey,
+  PrivateKey,
   UInt32,
   UInt64,
-  Bool,
   prop,
-  Mina,
   method,
-  PrivateKey,
-  AccountUpdate,
 } from 'snarkyjs';
 
 import { initialBalance } from './ZKEvent.test';
@@ -92,7 +87,7 @@ export class ZKEvent extends SmartContract {
   }
 
   @method
-  claimTicket(account: Account, path: MerkleWitness) {
+  claimTicket(account: Account, path: MerkleWitness, privateKey: PrivateKey) {
     // CHECKS
     let commitment = this.commitment.get();
     this.commitment.assertEquals(commitment);
@@ -105,6 +100,9 @@ export class ZKEvent extends SmartContract {
 
     let maxTicketsPerAccount = this.maxTicketsPerAccount.get();
     this.maxTicketsPerAccount.assertEquals(maxTicketsPerAccount);
+
+    // check that msg.sender is the owner of the account
+    privateKey.toPublicKey().assertEquals(account.publicKey);
 
     // check that account is within the committed Merkle Tree (whitelist)
     path.calculateRoot(account.hash()).assertEquals(commitment);
@@ -132,7 +130,8 @@ export class ZKEvent extends SmartContract {
     from: Account,
     fromPath: MerkleWitness,
     to: Account,
-    toPath: MerkleWitness
+    toPath: MerkleWitness,
+    privateKey: PrivateKey
   ) {
     // CHECKS
     let commitment = this.commitment.get();
@@ -140,6 +139,9 @@ export class ZKEvent extends SmartContract {
 
     let maxTicketsPerAccount = this.maxTicketsPerAccount.get();
     this.maxTicketsPerAccount.assertEquals(maxTicketsPerAccount);
+
+    // check that msg.sender is the owner of the account
+    privateKey.toPublicKey().assertEquals(from.publicKey);
 
     // ensure first witness is correct
     fromPath.calculateRoot(from.hash()).assertEquals(commitment);

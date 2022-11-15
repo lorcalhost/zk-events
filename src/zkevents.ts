@@ -11,12 +11,12 @@ import {
   state,
   CircuitValue,
   PublicKey,
+  PrivateKey,
   UInt64,
   prop,
   Mina,
   method,
   UInt32,
-  PrivateKey,
   AccountUpdate,
 } from 'snarkyjs';
 
@@ -100,7 +100,7 @@ class ZKEvent extends SmartContract {
   }
 
   @method
-  claimTicket(account: Account, path: MerkleWitness) {
+  claimTicket(account: Account, path: MerkleWitness, privateKey: PrivateKey) {
     // CHECKS
     let commitment = this.commitment.get();
     this.commitment.assertEquals(commitment);
@@ -110,6 +110,9 @@ class ZKEvent extends SmartContract {
 
     let maxTickets = this.maxTickets.get();
     this.maxTickets.assertEquals(maxTickets);
+
+    // check that msg.sender is the owner of the account
+    privateKey.toPublicKey().assertEquals(account.publicKey);
 
     // check that account is within the committed Merkle Tree (whitelist)
     path.calculateRoot(account.hash()).assertEquals(commitment);
@@ -137,11 +140,15 @@ class ZKEvent extends SmartContract {
     from: Account,
     fromPath: MerkleWitness,
     to: Account,
-    toPath: MerkleWitness
+    toPath: MerkleWitness,
+    privateKey: PrivateKey
   ) {
     // CHECKS
     let commitment = this.commitment.get();
     this.commitment.assertEquals(commitment);
+
+    // check that msg.sender is the owner of the account
+    privateKey.toPublicKey().assertEquals(from.publicKey);
 
     // ensure first witness is correct
     fromPath.calculateRoot(from.hash()).assertEquals(commitment);
@@ -234,7 +241,11 @@ async function claimTicket(name: Names, index: bigint) {
   let witness = new MerkleWitness(w);
 
   let tx = await Mina.transaction(feePayer, () => {
-    zkEventsZkApp.claimTicket(account, witness);
+    zkEventsZkApp.claimTicket(
+      account,
+      witness,
+      Local.testAccounts[0].privateKey
+    );
     if (!doProofs) zkEventsZkApp.sign(zkappKey);
   });
   if (doProofs) {
@@ -248,7 +259,7 @@ async function claimTicket(name: Names, index: bigint) {
   Tree.setLeaf(index, accHash);
   if (doQr) {
     QRCode.toString(
-      account.publicKey.toString(),
+      account.publicKey.toBase58(),
       { type: 'terminal' },
       function (err, url) {
         console.log(url);
@@ -282,7 +293,13 @@ async function sendTicket(
 
   // send transaction
   let tx = await Mina.transaction(feePayer, () => {
-    zkEventsZkApp.sendTicket(fromAccount, witnessFrom, toAccount, witnessTo);
+    zkEventsZkApp.sendTicket(
+      fromAccount,
+      witnessFrom,
+      toAccount,
+      witnessTo,
+      Local.testAccounts[0].privateKey
+    );
     if (!doProofs) zkEventsZkApp.sign(zkappKey);
   });
   if (doProofs) {
@@ -296,7 +313,7 @@ async function sendTicket(
   Tree.setLeaf(indexTo, toAccount.hash());
   if (doQr) {
     QRCode.toString(
-      toAccount.publicKey.toString(),
+      toAccount.publicKey.toBase58(),
       { type: 'terminal' },
       function (err, url) {
         console.log(url);

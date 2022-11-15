@@ -1,21 +1,11 @@
 import { ZKEvent, Account, whitelistSize } from './ZKEvent';
 import {
-  SmartContract,
   isReady,
   shutdown,
-  Poseidon,
   Field,
   Experimental,
-  Permissions,
-  DeployArgs,
-  State,
-  state,
-  CircuitValue,
   PublicKey,
-  UInt64,
-  prop,
   Mina,
-  method,
   UInt32,
   PrivateKey,
   AccountUpdate,
@@ -61,13 +51,17 @@ describe('ZKEvent', () => {
   let deployerAccount: PrivateKey,
     zkAppPrivateKey: PrivateKey,
     zkAppAddress: PublicKey,
+    testAccounts: {
+      publicKey: PublicKey;
+      privateKey: PrivateKey;
+    }[],
     Accounts: Map<string, Account> = new Map<Names, Account>(),
     Tree: MerkleTree,
     initialCommitment: Field;
 
   beforeEach(async () => {
     await isReady;
-    let testAccounts = createLocalBlockchain();
+    testAccounts = createLocalBlockchain();
     deployerAccount = testAccounts[0].privateKey;
     let alice = new Account(testAccounts[0].publicKey, UInt32.from(0));
     let bob = new Account(testAccounts[1].publicKey, UInt32.from(0));
@@ -133,7 +127,7 @@ describe('ZKEvent', () => {
     let witness = new MerkleWitness(w);
 
     let tx = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.claimTicket(account, witness);
+      zkAppInstance.claimTicket(account, witness, testAccounts[0].privateKey);
       if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
     });
     // very slow on M1 macs
@@ -148,7 +142,7 @@ describe('ZKEvent', () => {
     Tree.setLeaf(index, accHash);
     if (doQr) {
       QRCode.toString(
-        account.publicKey.toString(),
+        account.publicKey.toBase58(),
         { type: 'terminal' },
         function (err, url) {
           console.log(url);
@@ -177,7 +171,7 @@ describe('ZKEvent', () => {
     let witness = new MerkleWitness(w);
 
     let tx = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.claimTicket(account, witness);
+      zkAppInstance.claimTicket(account, witness, testAccounts[0].privateKey);
       if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
     });
     // very slow on M1 macs
@@ -192,7 +186,7 @@ describe('ZKEvent', () => {
     Tree.setLeaf(index, accHash);
     if (doQr) {
       QRCode.toString(
-        account.publicKey.toString(),
+        account.publicKey.toBase58(),
         { type: 'terminal' },
         function (err, url) {
           console.log(url);
@@ -223,7 +217,13 @@ describe('ZKEvent', () => {
 
     // send transaction
     tx = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.sendTicket(fromAccount, witnessFrom, toAccount, witnessTo);
+      zkAppInstance.sendTicket(
+        fromAccount,
+        witnessFrom,
+        toAccount,
+        witnessTo,
+        testAccounts[0].privateKey
+      );
       if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
     });
     if (doProofs) {
@@ -237,7 +237,7 @@ describe('ZKEvent', () => {
     Tree.setLeaf(indexTo, toAccount.hash());
     if (doQr) {
       QRCode.toString(
-        toAccount.publicKey.toString(),
+        toAccount.publicKey.toBase58(),
         { type: 'terminal' },
         function (err, url) {
           console.log(url);
@@ -265,7 +265,7 @@ describe('ZKEvent', () => {
     let witness = new MerkleWitness(w);
 
     let tx = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.claimTicket(account, witness);
+      zkAppInstance.claimTicket(account, witness, testAccounts[0].privateKey);
       if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
     });
     // very slow on M1 macs
@@ -280,7 +280,7 @@ describe('ZKEvent', () => {
     Tree.setLeaf(index, accHash);
     if (doQr) {
       QRCode.toString(
-        account.publicKey.toString(),
+        account.publicKey.toBase58(),
         { type: 'terminal' },
         function (err, url) {
           console.log(url);
