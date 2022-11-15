@@ -17,35 +17,13 @@ import QRCode from 'qrcode';
 
 type Names = 'Alice' | 'Bob' | 'Carol' | 'Dave';
 
-let maxNumberOfTicketsPerAccount = 2;
-let maxTicketsPerEvent = 100;
-export const initialBalance = 10_000_000_000;
-
-// very slow on M1 macs if enabled
-const doProofs = false;
-// generate QR code in terminal
-const doQr = false;
+let maxNumberOfTicketsPerAccount = 2; // max number of tickets a user can claim
+let maxTicketsPerEvent = 100; // max number of tickets an event can emit
+export const initialBalance = 10_000_000_000; // initial balance
+const doQr = false; // generate QR code in terminal
+const doProofs = false; // very slow on M1 macs if enabled
 
 class MerkleWitness extends Experimental.MerkleWitness(whitelistSize) {}
-
-function createLocalBlockchain() {
-  const Local = Mina.LocalBlockchain();
-  Mina.setActiveInstance(Local);
-  return Local.testAccounts;
-}
-
-async function localDeploy(
-  zkAppInstance: ZKEvent,
-  zkAppPrivatekey: PrivateKey,
-  deployerAccount: PrivateKey
-) {
-  const txn = await Mina.transaction(deployerAccount, () => {
-    AccountUpdate.fundNewAccount(deployerAccount, { initialBalance });
-    zkAppInstance.deploy({ zkappKey: zkAppPrivatekey });
-    zkAppInstance.sign(zkAppPrivatekey);
-  });
-  await txn.send().wait();
-}
 
 describe('ZKEvent', () => {
   let deployerAccount: PrivateKey,
@@ -63,22 +41,24 @@ describe('ZKEvent', () => {
     await isReady;
     testAccounts = createLocalBlockchain();
     deployerAccount = testAccounts[0].privateKey;
+    zkAppPrivateKey = PrivateKey.random();
+    zkAppAddress = zkAppPrivateKey.toPublicKey();
     let alice = new Account(testAccounts[0].publicKey, UInt32.from(0));
     let bob = new Account(testAccounts[1].publicKey, UInt32.from(0));
     let carol = new Account(testAccounts[2].publicKey, UInt32.from(0));
     let dave = new Account(testAccounts[3].publicKey, UInt32.from(0));
+    // setup accounts
     Accounts.set('Alice', alice);
     Accounts.set('Bob', bob);
     Accounts.set('Carol', carol);
     Accounts.set('Dave', dave);
-    zkAppPrivateKey = PrivateKey.random();
-    zkAppAddress = zkAppPrivateKey.toPublicKey();
+    // setup tree
     Tree = new Experimental.MerkleTree(whitelistSize);
     Tree.setLeaf(0n, alice.hash());
     Tree.setLeaf(1n, bob.hash());
     Tree.setLeaf(2n, carol.hash());
     Tree.setLeaf(3n, dave.hash());
-    Tree;
+    // generate whitelist root
     initialCommitment = Tree.getRoot();
   });
 
@@ -87,116 +67,87 @@ describe('ZKEvent', () => {
   });
 
   it('generates and deploys the `ZKEvent` smart contract', async () => {
-    const zkAppInstance = new ZKEvent(zkAppAddress);
-    await localDeploy(zkAppInstance, zkAppPrivateKey, deployerAccount);
+    await deployZKEvent(
+      zkAppAddress,
+      zkAppPrivateKey,
+      deployerAccount,
+      initialCommitment
+    );
   });
 
-  it('correctly sets up the `ZKEvent`', async () => {
-    const zkAppInstance = new ZKEvent(zkAppAddress);
-    await localDeploy(zkAppInstance, zkAppPrivateKey, deployerAccount);
-    const txn = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.setup(
-        initialCommitment,
-        UInt32.fromNumber(maxTicketsPerEvent),
-        UInt32.fromNumber(maxNumberOfTicketsPerAccount)
-      );
-      zkAppInstance.sign(zkAppPrivateKey);
-    });
-    await txn.send().wait();
-
+  it('correctly sets up the `ZKEvent` contract', async () => {
+    const zkAppInstance = await deployZKEvent(
+      zkAppAddress,
+      zkAppPrivateKey,
+      deployerAccount,
+      initialCommitment
+    );
     const state = zkAppInstance.isReady.get();
-    expect(state).toEqual(UInt32.fromNumber(1));
+    expect(state).toEqual(UInt32.fromNumber(1)); // flag has been switched to 1
   });
 
   it('allows claiming a ticket if a user is whitelisted', async () => {
-    const zkAppInstance = new ZKEvent(zkAppAddress);
-    await localDeploy(zkAppInstance, zkAppPrivateKey, deployerAccount);
-    const txn = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.setup(
-        initialCommitment,
-        UInt32.fromNumber(maxTicketsPerEvent),
-        UInt32.fromNumber(maxNumberOfTicketsPerAccount)
-      );
-      zkAppInstance.sign(zkAppPrivateKey);
-    });
-    await txn.send().wait();
+    const zkAppInstance = await deployZKEvent(
+      zkAppAddress,
+      zkAppPrivateKey,
+      deployerAccount,
+      initialCommitment
+    );
 
     let account = Accounts.get('Alice')!;
     let index = 0n;
     let w = Tree.getWitness(index);
     let witness = new MerkleWitness(w);
 
-    let tx = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.claimTicket(account, witness, testAccounts[0].privateKey);
-      if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
-    });
-    // very slow on M1 macs
-    if (doProofs) {
-      await tx.prove();
-    }
-    await tx.send();
+    await claimTicket(
+      deployerAccount,
+      zkAppInstance,
+      account,
+      witness,
+      testAccounts[0].privateKey,
+      zkAppPrivateKey
+    );
 
-    // if the transaction was successful, we can update our off-chain storage as well
+    // update off chain storage
     account.tickets = account.tickets.add(1);
     let accHash = account.hash();
     Tree.setLeaf(index, accHash);
-    if (doQr) {
-      QRCode.toString(
-        account.publicKey.toBase58(),
-        { type: 'terminal' },
-        function (err, url) {
-          console.log(url);
-        }
-      );
-    }
+    await generateQr(account);
 
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
   });
 
   it('allows allows sending a ticket to another user', async () => {
-    const zkAppInstance = new ZKEvent(zkAppAddress);
-    await localDeploy(zkAppInstance, zkAppPrivateKey, deployerAccount);
-    const txn = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.setup(
-        initialCommitment,
-        UInt32.fromNumber(maxTicketsPerEvent),
-        UInt32.fromNumber(maxNumberOfTicketsPerAccount)
-      );
-      zkAppInstance.sign(zkAppPrivateKey);
-    });
-    await txn.send().wait();
+    const zkAppInstance = await deployZKEvent(
+      zkAppAddress,
+      zkAppPrivateKey,
+      deployerAccount,
+      initialCommitment
+    );
+
     let account = Accounts.get('Alice')!;
     let index = 0n;
     let w = Tree.getWitness(index);
     let witness = new MerkleWitness(w);
 
-    let tx = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.claimTicket(account, witness, testAccounts[0].privateKey);
-      if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
-    });
-    // very slow on M1 macs
-    if (doProofs) {
-      await tx.prove();
-    }
-    await tx.send();
+    await claimTicket(
+      deployerAccount,
+      zkAppInstance,
+      account,
+      witness,
+      testAccounts[0].privateKey,
+      zkAppPrivateKey
+    );
 
     // if the transaction was successful, we can update our off-chain storage as well
     account.tickets = account.tickets.add(1);
     let accHash = account.hash();
     Tree.setLeaf(index, accHash);
-    if (doQr) {
-      QRCode.toString(
-        account.publicKey.toBase58(),
-        { type: 'terminal' },
-        function (err, url) {
-          console.log(url);
-        }
-      );
-    }
+    await generateQr(account);
 
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
 
-    // SEND TICKET
+    // SEND TICKET part
     let fromAccount = Accounts.get('Alice')!;
     let toAccount = Accounts.get('Bob')!;
     let indexFrom = 0n;
@@ -215,81 +166,147 @@ describe('ZKEvent', () => {
     let wTo = Tree.getWitness(indexTo);
     let witnessTo = new MerkleWitness(wTo);
 
-    // send transaction
-    tx = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.sendTicket(
-        fromAccount,
-        witnessFrom,
-        toAccount,
-        witnessTo,
-        testAccounts[0].privateKey
-      );
-      if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
-    });
-    if (doProofs) {
-      await tx.prove();
-    }
-    await tx.send();
+    // send ticket tx
+    await sendTicket(
+      deployerAccount,
+      zkAppInstance,
+      fromAccount,
+      witnessFrom,
+      toAccount,
+      witnessTo,
+      testAccounts[0].privateKey,
+      zkAppPrivateKey
+    );
 
-    // if the transaction was successful, we can update our off-chain storage as well
+    // update off chain state
     fromAccount.tickets = fromAccount.tickets.sub(1);
     toAccount.tickets = toAccount.tickets.add(1);
     Tree.setLeaf(indexTo, toAccount.hash());
-    if (doQr) {
-      QRCode.toString(
-        toAccount.publicKey.toBase58(),
-        { type: 'terminal' },
-        function (err, url) {
-          console.log(url);
-        }
-      );
-    }
+    await generateQr(toAccount);
+    // verify update was correct
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
   });
 
   it('can prove account owns a ticket', async () => {
-    const zkAppInstance = new ZKEvent(zkAppAddress);
-    await localDeploy(zkAppInstance, zkAppPrivateKey, deployerAccount);
-    const txn = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.setup(
-        initialCommitment,
-        UInt32.fromNumber(maxTicketsPerEvent),
-        UInt32.fromNumber(maxNumberOfTicketsPerAccount)
-      );
-      zkAppInstance.sign(zkAppPrivateKey);
-    });
-    await txn.send().wait();
+    const zkAppInstance = await deployZKEvent(
+      zkAppAddress,
+      zkAppPrivateKey,
+      deployerAccount,
+      initialCommitment
+    );
+
     let account = Accounts.get('Alice')!;
     let index = 0n;
     let w = Tree.getWitness(index);
     let witness = new MerkleWitness(w);
 
-    let tx = await Mina.transaction(deployerAccount, () => {
-      zkAppInstance.claimTicket(account, witness, testAccounts[0].privateKey);
-      if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
-    });
-    // very slow on M1 macs
-    if (doProofs) {
-      await tx.prove();
-    }
-    await tx.send();
+    await claimTicket(
+      deployerAccount,
+      zkAppInstance,
+      account,
+      witness,
+      testAccounts[0].privateKey,
+      zkAppPrivateKey
+    );
 
     // if the transaction was successful, we can update our off-chain storage as well
     account.tickets = account.tickets.add(1);
     let accHash = account.hash();
     Tree.setLeaf(index, accHash);
-    if (doQr) {
-      QRCode.toString(
-        account.publicKey.toBase58(),
-        { type: 'terminal' },
-        function (err, url) {
-          console.log(url);
-        }
-      );
-    }
+    await generateQr(account);
 
     let root = zkAppInstance.commitment.get();
     root.assertEquals(Tree.getRoot());
     account.tickets.assertGte(UInt32.fromNumber(1));
   });
 });
+
+function createLocalBlockchain() {
+  const Local = Mina.LocalBlockchain();
+  Mina.setActiveInstance(Local);
+  return Local.testAccounts;
+}
+
+async function sendTx(tx: any, prove: boolean = false) {
+  // very slow on M1 macs
+  if (prove) {
+    await tx.prove();
+  }
+  await tx.send().wait();
+}
+
+async function deployZKEvent(
+  zkAppAddress: PublicKey,
+  zkAppPrivateKey: PrivateKey,
+  deployerAccount: PrivateKey,
+  initialCommitment: Field
+) {
+  const zkAppInstance = new ZKEvent(zkAppAddress);
+  let tx = await Mina.transaction(deployerAccount, () => {
+    AccountUpdate.fundNewAccount(deployerAccount, { initialBalance });
+    zkAppInstance.deploy({ zkappKey: zkAppPrivateKey });
+    zkAppInstance.sign(zkAppPrivateKey);
+  });
+  await sendTx(tx);
+
+  tx = await Mina.transaction(deployerAccount, () => {
+    zkAppInstance.setup(
+      initialCommitment,
+      UInt32.fromNumber(maxTicketsPerEvent),
+      UInt32.fromNumber(maxNumberOfTicketsPerAccount)
+    );
+    zkAppInstance.sign(zkAppPrivateKey);
+  });
+  await sendTx(tx);
+  return zkAppInstance;
+}
+
+async function generateQr(account: Account) {
+  if (doQr) {
+    QRCode.toString(
+      account.publicKey.toBase58(),
+      { type: 'terminal' },
+      function (err, url) {
+        console.log(url);
+      }
+    );
+  }
+}
+
+async function claimTicket(
+  deployerAccount: PrivateKey,
+  zkAppInstance: ZKEvent,
+  account: Account,
+  witness: MerkleWitness,
+  pkey: PrivateKey,
+  zkAppPrivateKey: PrivateKey
+) {
+  let tx = await Mina.transaction(deployerAccount, () => {
+    zkAppInstance.claimTicket(account, witness, pkey);
+    if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
+  });
+  await sendTx(tx, doProofs);
+}
+
+async function sendTicket(
+  deployerAccount: PrivateKey,
+  zkAppInstance: ZKEvent,
+  fromAccount: Account,
+  witnessFrom: MerkleWitness,
+  toAccount: Account,
+  witnessTo: MerkleWitness,
+  pkey: PrivateKey,
+  zkAppPrivateKey: PrivateKey
+) {
+  let tx = await Mina.transaction(deployerAccount, () => {
+    zkAppInstance.sendTicket(
+      fromAccount,
+      witnessFrom,
+      toAccount,
+      witnessTo,
+      pkey
+    );
+    if (!doProofs) zkAppInstance.sign(zkAppPrivateKey);
+  });
+  await sendTx(tx, doProofs);
+}
