@@ -26,7 +26,7 @@ The zkApp also generates a ticket QR code containing data that can be used to pr
 - [x] Add msg.sender check on claim and transfer
 - [ ] Add timestamp check on claim and transfer
 - [ ] Fix WL const handling
-- [ ] More concise tests
+- [x] More concise tests
 
 ### V2
 
