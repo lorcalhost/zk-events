@@ -16,7 +16,7 @@ import {
   method,
 } from 'snarkyjs';
 
-import { initialBalance } from './ZKEvent.test';
+export const initialBalance = 10_000_000_000;
 
 export const whitelistSize = 256;
 
