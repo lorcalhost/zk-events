@@ -25,7 +25,6 @@ The zkApp also generates a ticket QR code containing data that can be used to pr
 - [x] Write tests
 - [x] Add msg.sender check on claim and transfer
 - [ ] Add timestamp check on claim and transfer
-- [ ] Fix WL const handling
 - [x] More concise tests
 
 ### V2
@@ -37,10 +36,10 @@ The zkApp also generates a ticket QR code containing data that can be used to pr
 
 ## How to run
 
-Run in interactive mode:
+Run demo:
 
 ```sh
-npm run interactive
+npm run demo
 ```
 
 Run tests:
