@@ -1,4 +1,4 @@
-import { ZKEvent, Account, whitelistSize } from './ZKEvent';
+import { ZKEvent, Account, whitelistSize, initialBalance } from './ZKEvent';
 import {
   isReady,
   shutdown,
@@ -19,7 +19,6 @@ type Names = 'Alice' | 'Bob' | 'Carol' | 'Dave';
 
 let maxNumberOfTicketsPerAccount = 2; // max number of tickets a user can claim
 let maxTicketsPerEvent = 100; // max number of tickets an event can emit
-export const initialBalance = 10_000_000_000; // initial balance
 const doQr = false; // generate QR code in terminal
 const doProofs = false; // very slow on M1 macs if enabled
 
