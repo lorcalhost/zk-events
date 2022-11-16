@@ -21,7 +21,7 @@
     "test": "node --experimental-vm-modules --experimental-wasm-modules --experimental-wasm-threads node_modules/jest/bin/jest.js",
     "testw": "node --experimental-vm-modules --experimental-wasm-modules --experimental-wasm-threads node_modules/jest/bin/jest.js --watch",
     "lint": "npx eslint src/* --fix",
-    "interactive": "npm run build && node ./build/src/zkevents.js"
+    "demo": "tsc -p tsconfig.json && node --experimental-specifier-resolution=node --no-warnings ./build/src/demo.js"
   },
   "lint-staged": {
     "**/*": [
