@@ -2,11 +2,12 @@ import { ZKEvent, Account, whitelistSize, initialBalance } from './ZKEvent';
 import {
   isReady,
   shutdown,
-  Experimental,
   PrivateKey,
   Mina,
   UInt32,
   AccountUpdate,
+  MerkleTree,
+  MerkleWitness,
 } from 'snarkyjs';
 
 import QRCode from 'qrcode';
@@ -25,7 +26,7 @@ const maxTicketsPerEvent = 100; // max number of tickets an event can emit
 const doProofs = false; // very slow on M1 macs if enabled
 const doQr = true; // display QR code in terminal
 
-class MerkleWitness extends Experimental.MerkleWitness(whitelistSize) {}
+class MyMerkleWitness extends MerkleWitness(whitelistSize) {}
 
 type Names = 'Alice' | 'Bob' | 'Carol' | 'Dave';
 
@@ -53,7 +54,7 @@ Accounts.set('Dave', dave);
 
 // we now need "wrap" the Merkle tree around our off-chain storage
 // we initialize a new Merkle Tree with height whitelistSize
-const Tree = new Experimental.MerkleTree(whitelistSize);
+const Tree = new MerkleTree(whitelistSize);
 
 Tree.setLeaf(0n, alice.hash());
 Tree.setLeaf(1n, bob.hash());
@@ -76,8 +77,8 @@ await tx.send();
 tx = await Mina.transaction(deployerAccount, () => {
   zkAppInstance.setup(
     initialCommitment,
-    UInt32.fromNumber(maxTicketsPerEvent),
-    UInt32.fromNumber(maxNumberOfTicketsPerAccount)
+    UInt32.from(maxTicketsPerEvent),
+    UInt32.from(maxNumberOfTicketsPerAccount)
   );
   zkAppInstance.sign(zkappKey);
 });
@@ -100,7 +101,8 @@ console.log(
 const question = (questionText: string) =>
   new Promise<string>((resolve) => rl.question(questionText, resolve));
 
-while (true) {
+let x;
+while (typeof x === 'undefined') {
   let varName = await question(
     '\nWhat do you want to do?\n' +
       '0 - 🎟️  Claim ticket\n' +
@@ -135,7 +137,7 @@ while (true) {
 async function claimTicket(name: Names, index: bigint) {
   let account = Accounts.get(name)!;
   let w = Tree.getWitness(index);
-  let witness = new MerkleWitness(w);
+  let witness = new MyMerkleWitness(w);
 
   let tx = await Mina.transaction(deployerAccount, () => {
     zkAppInstance.claimTicket(
@@ -178,7 +180,7 @@ async function sendTicket(
 
   // compute from witness
   let wFrom = Tree.getWitness(indexFrom);
-  let witnessFrom = new MerkleWitness(wFrom);
+  let witnessFrom = new MyMerkleWitness(wFrom);
 
   // compute to witness
   let fromHash = new Account(
@@ -187,7 +189,7 @@ async function sendTicket(
   ).hash();
   Tree.setLeaf(indexFrom, fromHash);
   let wTo = Tree.getWitness(indexTo);
-  let witnessTo = new MerkleWitness(wTo);
+  let witnessTo = new MyMerkleWitness(wTo);
 
   // send transaction
   let tx = await Mina.transaction(deployerAccount, () => {
@@ -224,7 +226,7 @@ async function sendTicket(
 async function claimTicketCase() {
   if (
     Accounts.get('Alice')
-      ?.tickets.equals(UInt32.fromNumber(maxNumberOfTicketsPerAccount))
+      ?.tickets.equals(UInt32.from(maxNumberOfTicketsPerAccount))
       .toBoolean()
   ) {
     console.log(
@@ -242,14 +244,14 @@ async function claimTicketCase() {
 }
 
 async function sendTicketCase() {
-  if (Accounts.get('Alice')?.tickets.lt(UInt32.fromNumber(1)).toBoolean()) {
+  if (Accounts.get('Alice')?.tickets.lt(UInt32.from(1)).toBoolean()) {
     console.log(`❗️You do not have any ticket to give to Bob (0)`);
     return;
   }
 
   if (
     Accounts.get('Bob')
-      ?.tickets.equals(UInt32.fromNumber(maxNumberOfTicketsPerAccount))
+      ?.tickets.equals(UInt32.from(maxNumberOfTicketsPerAccount))
       .toBoolean()
   ) {
     console.log(
@@ -265,14 +267,14 @@ async function sendTicketCase() {
 }
 
 async function requestSendTicketCase() {
-  if (Accounts.get('Bob')?.tickets.lt(UInt32.fromNumber(1)).toBoolean()) {
+  if (Accounts.get('Bob')?.tickets.lt(UInt32.from(1)).toBoolean()) {
     console.log(`❗️Bob does not have any ticket to give (0)`);
     return;
   }
 
   if (
     Accounts.get('Alice')
-      ?.tickets.equals(UInt32.fromNumber(maxNumberOfTicketsPerAccount))
+      ?.tickets.equals(UInt32.from(maxNumberOfTicketsPerAccount))
       .toBoolean()
   ) {
     console.log(
@@ -290,5 +292,5 @@ async function requestSendTicketCase() {
 async function exitCase() {
   setTimeout(shutdown, 0);
   rl.close();
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  x = 1;
 }

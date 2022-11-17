@@ -2,7 +2,6 @@ import {
   SmartContract,
   Poseidon,
   Field,
-  Experimental,
   Permissions,
   DeployArgs,
   State,
@@ -14,13 +13,14 @@ import {
   UInt64,
   prop,
   method,
+  MerkleWitness,
 } from 'snarkyjs';
 
 export const initialBalance = 10_000_000_000;
 
 export const whitelistSize = 256;
 
-export class MerkleWitness extends Experimental.MerkleWitness(whitelistSize) {}
+export class MyMerkleWitness extends MerkleWitness(whitelistSize) {}
 
 export class Account extends CircuitValue {
   @prop publicKey: PublicKey;
@@ -41,7 +41,7 @@ export class Account extends CircuitValue {
   }
 
   removeTicket(n: number): Account {
-    this.tickets.assertGte(UInt32.fromNumber(n));
+    this.tickets.assertGte(UInt32.from(n));
     return new Account(this.publicKey, this.tickets.sub(n));
   }
 }
@@ -59,11 +59,11 @@ export class ZKEvent extends SmartContract {
       ...Permissions.default(),
       editState: Permissions.proofOrSignature(),
     });
-    this.balance.addInPlace(UInt64.fromNumber(initialBalance));
-    this.commitment.set(Field.zero);
-    this.ticketsClaimed.set(UInt32.fromNumber(0));
-    this.maxTickets.set(UInt32.fromNumber(0));
-    this.isReady.set(UInt32.fromNumber(0));
+    this.balance.addInPlace(UInt64.from(initialBalance));
+    this.commitment.set(Field(0));
+    this.ticketsClaimed.set(UInt32.from(0));
+    this.maxTickets.set(UInt32.from(0));
+    this.isReady.set(UInt32.from(0));
   }
 
   @method
@@ -75,7 +75,7 @@ export class ZKEvent extends SmartContract {
     // check if event has already been setup
     let state = this.isReady.get();
     this.isReady.assertEquals(state);
-    state.assertEquals(UInt32.fromNumber(0));
+    state.assertEquals(UInt32.from(0));
 
     // setup
     this.commitment.set(initialCommitment);
@@ -83,11 +83,11 @@ export class ZKEvent extends SmartContract {
     this.maxTicketsPerAccount.set(maxTicketsPerAccount);
 
     // update state
-    this.isReady.set(UInt32.fromNumber(1));
+    this.isReady.set(UInt32.from(1));
   }
 
   @method
-  claimTicket(account: Account, path: MerkleWitness, privateKey: PrivateKey) {
+  claimTicket(account: Account, path: MyMerkleWitness, privateKey: PrivateKey) {
     // CHECKS
     let commitment = this.commitment.get();
     this.commitment.assertEquals(commitment);
@@ -122,15 +122,15 @@ export class ZKEvent extends SmartContract {
     this.commitment.set(newCommitment);
 
     // update number of claimed tickets
-    this.ticketsClaimed.set(ticketsClaimed.add(UInt32.fromNumber(1)));
+    this.ticketsClaimed.set(ticketsClaimed.add(UInt32.from(1)));
   }
 
   @method
   sendTicket(
     from: Account,
-    fromPath: MerkleWitness,
+    fromPath: MyMerkleWitness,
     to: Account,
-    toPath: MerkleWitness,
+    toPath: MyMerkleWitness,
     privateKey: PrivateKey
   ) {
     // CHECKS
@@ -147,7 +147,7 @@ export class ZKEvent extends SmartContract {
     fromPath.calculateRoot(from.hash()).assertEquals(commitment);
 
     // assert from has at least one ticket and to has less than max allowed tickets
-    from.tickets.assertGte(UInt32.fromNumber(1));
+    from.tickets.assertGte(UInt32.from(1));
     to.tickets.assertLt(maxTicketsPerAccount);
 
     // UPDATE STATE

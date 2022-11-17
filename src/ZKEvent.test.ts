@@ -3,15 +3,14 @@ import {
   isReady,
   shutdown,
   Field,
-  Experimental,
   PublicKey,
   Mina,
   UInt32,
   PrivateKey,
   AccountUpdate,
+  MerkleWitness,
+  MerkleTree,
 } from 'snarkyjs';
-
-import { MerkleTree } from 'snarkyjs/dist/node/lib/merkle_tree.js';
 
 import QRCode from 'qrcode';
 
@@ -22,7 +21,7 @@ let maxTicketsPerEvent = 100; // max number of tickets an event can emit
 const doQr = false; // generate QR code in terminal
 const doProofs = false; // very slow on M1 macs if enabled
 
-class MerkleWitness extends Experimental.MerkleWitness(whitelistSize) {}
+class MyMerkleWitness extends MerkleWitness(whitelistSize) {}
 
 describe('ZKEvent', () => {
   let deployerAccount: PrivateKey,
@@ -52,7 +51,7 @@ describe('ZKEvent', () => {
     Accounts.set('Carol', carol);
     Accounts.set('Dave', dave);
     // setup tree
-    Tree = new Experimental.MerkleTree(whitelistSize);
+    Tree = new MerkleTree(whitelistSize);
     Tree.setLeaf(0n, alice.hash());
     Tree.setLeaf(1n, bob.hash());
     Tree.setLeaf(2n, carol.hash());
@@ -82,7 +81,7 @@ describe('ZKEvent', () => {
       initialCommitment
     );
     const state = zkAppInstance.isReady.get();
-    expect(state).toEqual(UInt32.fromNumber(1)); // flag has been switched to 1
+    expect(state).toEqual(UInt32.from(1)); // flag has been switched to 1
   });
 
   it('allows claiming a ticket if a user is whitelisted', async () => {
@@ -96,7 +95,7 @@ describe('ZKEvent', () => {
     let account = Accounts.get('Alice')!;
     let index = 0n;
     let w = Tree.getWitness(index);
-    let witness = new MerkleWitness(w);
+    let witness = new MyMerkleWitness(w);
 
     await claimTicket(
       deployerAccount,
@@ -127,7 +126,7 @@ describe('ZKEvent', () => {
     let account = Accounts.get('Alice')!;
     let index = 0n;
     let w = Tree.getWitness(index);
-    let witness = new MerkleWitness(w);
+    let witness = new MyMerkleWitness(w);
 
     await claimTicket(
       deployerAccount,
@@ -154,7 +153,7 @@ describe('ZKEvent', () => {
 
     // compute from witness
     let wFrom = Tree.getWitness(indexFrom);
-    let witnessFrom = new MerkleWitness(wFrom);
+    let witnessFrom = new MyMerkleWitness(wFrom);
 
     // compute to witness
     let fromHash = new Account(
@@ -163,7 +162,7 @@ describe('ZKEvent', () => {
     ).hash();
     Tree.setLeaf(indexFrom, fromHash);
     let wTo = Tree.getWitness(indexTo);
-    let witnessTo = new MerkleWitness(wTo);
+    let witnessTo = new MyMerkleWitness(wTo);
 
     // send ticket tx
     await sendTicket(
@@ -197,7 +196,7 @@ describe('ZKEvent', () => {
     let account = Accounts.get('Alice')!;
     let index = 0n;
     let w = Tree.getWitness(index);
-    let witness = new MerkleWitness(w);
+    let witness = new MyMerkleWitness(w);
 
     await claimTicket(
       deployerAccount,
@@ -216,7 +215,7 @@ describe('ZKEvent', () => {
 
     let root = zkAppInstance.commitment.get();
     root.assertEquals(Tree.getRoot());
-    account.tickets.assertGte(UInt32.fromNumber(1));
+    account.tickets.assertGte(UInt32.from(1));
   });
 });
 
@@ -231,7 +230,7 @@ async function sendTx(tx: any, prove: boolean = false) {
   if (prove) {
     await tx.prove();
   }
-  await tx.send().wait();
+  await tx.send();
 }
 
 async function deployZKEvent(
@@ -251,8 +250,8 @@ async function deployZKEvent(
   tx = await Mina.transaction(deployerAccount, () => {
     zkAppInstance.setup(
       initialCommitment,
-      UInt32.fromNumber(maxTicketsPerEvent),
-      UInt32.fromNumber(maxNumberOfTicketsPerAccount)
+      UInt32.from(maxTicketsPerEvent),
+      UInt32.from(maxNumberOfTicketsPerAccount)
     );
     zkAppInstance.sign(zkAppPrivateKey);
   });
@@ -276,7 +275,7 @@ async function claimTicket(
   deployerAccount: PrivateKey,
   zkAppInstance: ZKEvent,
   account: Account,
-  witness: MerkleWitness,
+  witness: MyMerkleWitness,
   pkey: PrivateKey,
   zkAppPrivateKey: PrivateKey
 ) {
@@ -291,9 +290,9 @@ async function sendTicket(
   deployerAccount: PrivateKey,
   zkAppInstance: ZKEvent,
   fromAccount: Account,
-  witnessFrom: MerkleWitness,
+  witnessFrom: MyMerkleWitness,
   toAccount: Account,
-  witnessTo: MerkleWitness,
+  witnessTo: MyMerkleWitness,
   pkey: PrivateKey,
   zkAppPrivateKey: PrivateKey
 ) {
