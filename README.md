@@ -2,30 +2,31 @@
 
 # ZK Events
 
-A Mina zkApp that allows users to create events using a whitelist of people that can claim the tickets, and lets people prove ticket(s) ownership at the venue.
+A Mina zkApp for creating whitelisted events and have users claim tickets. Users can also send tickets to other users and prove ticket ownership at the event.
 
 ## General architecture description
 
-Each event has its own smart contract which stores a merkle root for the whitelist. The merkle tree is pre-setup with leaves for the whitelisted users. The merkle tree is updated whenever user claims or trades a ticket.
-The zkApp also generates a ticket QR code containing data that can be used to prove ownership at the venue.
+Each event has its own smart contract which stores a merkle root for the whitelist merkle tree. The merkle tree keeps track of any change in ticket balance for the users. The merkle root is updated whenever user claims or transfers a ticket. The smart contract also keeps track of the event details (max total tickets, max tickets per user, whitelist size, tickets claimed).
+The zkApp also generates a ticket QR code containing data that can be used to prove ticket ownership at the venue.
 
 ## Progress
 
 ### V1
 
-- [x] Figure out general architecture
+- [x] General architecture
 - [x] Event generation with whitelist
 - [x] Ticket claiming if in whitelist
 - [x] Gameify console interaction
-- [x] Limits on total number of tickets and claimable per user and in total
-- [x] Prove ticket ownership function
-- [x] Allow users to trade tickets
+- [x] Limits on total number of tickets
+- [x] Limits on maximum number of tickets claimable per user
+- [x] Prove ticket ownership
+- [x] Ticket transfer between users
 - [x] QR code generation
-- [x] Separate into multiple files
 - [x] Write tests
+- [x] Separate into multiple files tests, contract and demo
 - [x] Add msg.sender check on claim and transfer
-- [ ] Add timestamp check on claim and transfer
 - [x] More concise tests
+- [ ] Add timestamp check on claim and transfer (might require oracle)
 
 ### V2
 
@@ -50,7 +51,6 @@ npm run test
 
 ## Useful Links
 
-- Snarky sparse merkle tree: https://github.com/Comdex/snarky-smt
 - Snarkyjs documentation: https://o1-labs.github.io/snarkyjs/index.html
 
 ## Notes
