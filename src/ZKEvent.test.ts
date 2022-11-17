@@ -6,6 +6,7 @@ import {
   PublicKey,
   Mina,
   UInt32,
+  UInt64,
   PrivateKey,
   AccountUpdate,
   MerkleWitness,
@@ -254,6 +255,7 @@ async function deployZKEvent(
       initialCommitment,
       UInt32.from(maxTicketsPerEvent),
       UInt32.from(maxNumberOfTicketsPerAccount),
+      UInt64.from(Date.now() + 3600 * 1000 * 24),
       deployerAccount
     );
     zkAppInstance.sign(zkAppPrivateKey);
