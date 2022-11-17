@@ -111,7 +111,7 @@ describe('ZKEvent', () => {
     account.tickets = account.tickets.add(1);
     let accHash = account.hash();
     Tree.setLeaf(index, accHash);
-    await generateQr(account);
+    await generateQr(zkAppPrivateKey.toPublicKey(), accHash, 0n);
 
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
   });
@@ -142,7 +142,7 @@ describe('ZKEvent', () => {
     account.tickets = account.tickets.add(1);
     let accHash = account.hash();
     Tree.setLeaf(index, accHash);
-    await generateQr(account);
+    await generateQr(zkAppPrivateKey.toPublicKey(), accHash, 0n);
 
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
 
@@ -183,7 +183,7 @@ describe('ZKEvent', () => {
     fromAccount.transferred = fromAccount.transferred.add(1);
     toAccount.tickets = toAccount.tickets.add(1);
     Tree.setLeaf(indexTo, toAccount.hash());
-    await generateQr(toAccount);
+    await generateQr(zkAppPrivateKey.toPublicKey(), accHash, 0n);
     // verify update was correct
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
   });
@@ -214,8 +214,9 @@ describe('ZKEvent', () => {
     account.tickets = account.tickets.add(1);
     let accHash = account.hash();
     Tree.setLeaf(index, accHash);
-    await generateQr(account);
+    await generateQr(zkAppPrivateKey.toPublicKey(), accHash, 0n);
 
+    // prove account owns a ticket
     let root = zkAppInstance.commitment.get();
     root.assertEquals(Tree.getRoot());
     account.tickets.assertGte(UInt32.from(1));
@@ -264,10 +265,15 @@ async function deployZKEvent(
   return zkAppInstance;
 }
 
-async function generateQr(account: Account) {
+async function generateQr(event: PublicKey, hash: Field, index: BigInt) {
+  const data = {
+    event: event.toString(),
+    index: index.toString(),
+    hash: hash.toString(),
+  };
   if (doQr) {
     QRCode.toString(
-      account.publicKey.toBase58(),
+      JSON.stringify(data),
       { type: 'terminal' },
       function (err, url) {
         console.log(url);

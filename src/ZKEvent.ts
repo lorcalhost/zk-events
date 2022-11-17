@@ -186,7 +186,7 @@ export class ZKEvent extends SmartContract {
 
     // assert from has at least one ticket and to has less than max allowed tickets
     from.tickets.assertGte(UInt32.from(1));
-    to.tickets.add(to.transferred).assertLt(maxTicketsPerAccount);
+    to.tickets.assertLt(maxTicketsPerAccount);
 
     // UPDATE STATE
     // remove 1 ticket from account
