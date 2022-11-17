@@ -6,7 +6,7 @@ A Mina zkApp for creating whitelisted events and have users claim tickets. Users
 
 ## General architecture description
 
-Each event has its own smart contract which stores a merkle root for the whitelist merkle tree. The merkle tree keeps track of any change in ticket balance for the users. The merkle root is updated whenever user claims or transfers a ticket. The smart contract also keeps track of the event details (max total tickets, max tickets per user, whitelist size, tickets claimed).
+Each event has its own smart contract which stores a merkle root for the whitelist merkle tree. The merkle tree keeps track of any change in ticket balance for the users. The merkle root is updated whenever user claims or transfers a ticket. The smart contract also keeps track of the event details (max total tickets, max tickets per user, whitelist size, tickets claimed, owner).
 The zkApp also generates a ticket QR code containing data that can be used to prove ticket ownership at the venue.
 
 ## Progress
@@ -26,6 +26,7 @@ The zkApp also generates a ticket QR code containing data that can be used to pr
 - [x] Separate into multiple files tests, contract and demo
 - [x] Add msg.sender check on claim and transfer
 - [x] More concise tests
+- [x] Whitelist modifiable by owner
 - [ ] Add timestamp check on claim and transfer (might require oracle)
 
 ### V2
