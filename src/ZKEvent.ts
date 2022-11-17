@@ -25,11 +25,17 @@ export class MyMerkleWitness extends MerkleWitness(whitelistSize) {}
 export class Account extends CircuitValue {
   @prop publicKey: PublicKey;
   @prop tickets: UInt32;
+  @prop transferred: UInt32;
 
-  constructor(publicKey: PublicKey, tickets: UInt32) {
-    super(publicKey, tickets);
+  constructor(
+    publicKey: PublicKey,
+    tickets: UInt32,
+    transferred: UInt32 = UInt32.from(0)
+  ) {
+    super(publicKey, tickets, transferred);
     this.publicKey = publicKey;
     this.tickets = tickets;
+    this.transferred = transferred;
   }
 
   hash(): Field {
@@ -38,6 +44,10 @@ export class Account extends CircuitValue {
 
   addTicket(n: number): Account {
     return new Account(this.publicKey, this.tickets.add(n));
+  }
+
+  addTransferred(n: number): Account {
+    return new Account(this.publicKey, this.tickets, this.transferred.add(n));
   }
 
   removeTicket(n: number): Account {
@@ -51,7 +61,7 @@ export class ZKEvent extends SmartContract {
   @state(UInt32) ticketsClaimed = State<UInt32>();
   @state(UInt32) maxTickets = State<UInt32>();
   @state(UInt32) maxTicketsPerAccount = State<UInt32>();
-  @state(UInt32) isReady = State<UInt32>();
+  @state(PublicKey) owner = State<PublicKey>();
 
   deploy(args: DeployArgs) {
     super.deploy(args);
@@ -63,19 +73,20 @@ export class ZKEvent extends SmartContract {
     this.commitment.set(Field(0));
     this.ticketsClaimed.set(UInt32.from(0));
     this.maxTickets.set(UInt32.from(0));
-    this.isReady.set(UInt32.from(0));
+    this.owner.set(PublicKey.empty());
   }
 
   @method
   setup(
     initialCommitment: Field,
     maxTickets: UInt32,
-    maxTicketsPerAccount: UInt32
+    maxTicketsPerAccount: UInt32,
+    ownerPKey: PrivateKey
   ) {
     // check if event has already been setup
-    let state = this.isReady.get();
-    this.isReady.assertEquals(state);
-    state.assertEquals(UInt32.from(0));
+    let owner = this.owner.get();
+    this.owner.assertEquals(owner);
+    owner.assertEquals(PublicKey.empty());
 
     // setup
     this.commitment.set(initialCommitment);
@@ -83,7 +94,7 @@ export class ZKEvent extends SmartContract {
     this.maxTicketsPerAccount.set(maxTicketsPerAccount);
 
     // update state
-    this.isReady.set(UInt32.from(1));
+    this.owner.set(ownerPKey.toPublicKey());
   }
 
   @method
@@ -111,7 +122,7 @@ export class ZKEvent extends SmartContract {
     ticketsClaimed.assertLt(maxTickets);
 
     // check if user already has max number of tickets
-    account.tickets.assertLt(maxTicketsPerAccount);
+    account.tickets.add(account.transferred).assertLt(maxTicketsPerAccount);
 
     // UPDATE STATE
     // add 1 ticket to account
@@ -148,11 +159,12 @@ export class ZKEvent extends SmartContract {
 
     // assert from has at least one ticket and to has less than max allowed tickets
     from.tickets.assertGte(UInt32.from(1));
-    to.tickets.assertLt(maxTicketsPerAccount);
+    to.tickets.add(to.transferred).assertLt(maxTicketsPerAccount);
 
     // UPDATE STATE
     // remove 1 ticket from account
     let newFromAccount = from.removeTicket(1);
+    newFromAccount = newFromAccount.addTransferred(1);
 
     // ensure pre computation of second witness is correct
     let tempCommitment = fromPath.calculateRoot(newFromAccount.hash());

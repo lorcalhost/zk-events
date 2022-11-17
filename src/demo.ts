@@ -78,7 +78,8 @@ tx = await Mina.transaction(deployerAccount, () => {
   zkAppInstance.setup(
     initialCommitment,
     UInt32.from(maxTicketsPerEvent),
-    UInt32.from(maxNumberOfTicketsPerAccount)
+    UInt32.from(maxNumberOfTicketsPerAccount),
+    deployerAccount
   );
   zkAppInstance.sign(zkappKey);
 });
@@ -185,7 +186,8 @@ async function sendTicket(
   // compute to witness
   let fromHash = new Account(
     fromAccount.publicKey,
-    fromAccount.tickets.sub(1)
+    fromAccount.tickets.sub(1),
+    fromAccount.transferred.add(1)
   ).hash();
   Tree.setLeaf(indexFrom, fromHash);
   let wTo = Tree.getWitness(indexTo);
@@ -209,6 +211,7 @@ async function sendTicket(
 
   // if the transaction was successful, we can update our off-chain storage as well
   fromAccount.tickets = fromAccount.tickets.sub(1);
+  fromAccount.transferred = fromAccount.transferred.add(1);
   toAccount.tickets = toAccount.tickets.add(1);
   Tree.setLeaf(indexTo, toAccount.hash());
   if (doQr) {

@@ -80,8 +80,8 @@ describe('ZKEvent', () => {
       deployerAccount,
       initialCommitment
     );
-    const state = zkAppInstance.isReady.get();
-    expect(state).toEqual(UInt32.from(1)); // flag has been switched to 1
+    const state = zkAppInstance.owner.get();
+    expect(state).toEqual(deployerAccount.toPublicKey()); // flag has been switched to 1
   });
 
   it('allows claiming a ticket if a user is whitelisted', async () => {
@@ -158,7 +158,8 @@ describe('ZKEvent', () => {
     // compute to witness
     let fromHash = new Account(
       fromAccount.publicKey,
-      fromAccount.tickets.sub(1)
+      fromAccount.tickets.sub(1),
+      fromAccount.transferred.add(1)
     ).hash();
     Tree.setLeaf(indexFrom, fromHash);
     let wTo = Tree.getWitness(indexTo);
@@ -178,6 +179,7 @@ describe('ZKEvent', () => {
 
     // update off chain state
     fromAccount.tickets = fromAccount.tickets.sub(1);
+    fromAccount.transferred = fromAccount.transferred.add(1);
     toAccount.tickets = toAccount.tickets.add(1);
     Tree.setLeaf(indexTo, toAccount.hash());
     await generateQr(toAccount);
@@ -251,7 +253,8 @@ async function deployZKEvent(
     zkAppInstance.setup(
       initialCommitment,
       UInt32.from(maxTicketsPerEvent),
-      UInt32.from(maxNumberOfTicketsPerAccount)
+      UInt32.from(maxNumberOfTicketsPerAccount),
+      deployerAccount
     );
     zkAppInstance.sign(zkAppPrivateKey);
   });
