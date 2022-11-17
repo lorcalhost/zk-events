@@ -5,6 +5,7 @@ import {
   PrivateKey,
   Mina,
   UInt32,
+  UInt64,
   AccountUpdate,
   MerkleTree,
   MerkleWitness,
@@ -79,6 +80,7 @@ tx = await Mina.transaction(deployerAccount, () => {
     initialCommitment,
     UInt32.from(maxTicketsPerEvent),
     UInt32.from(maxNumberOfTicketsPerAccount),
+    UInt64.from(Date.now() + 3600 * 1000 * 24),
     deployerAccount
   );
   zkAppInstance.sign(zkappKey);
@@ -97,7 +99,8 @@ console.log(
   `maxTicketsPerUser=${maxNumberOfTicketsPerAccount},`,
   `maxTicketsPerEvent=${maxTicketsPerEvent},`,
   `QR=${doQr},`,
-  `eventDeployed=true)`
+  `eventDeployed=true,`,
+  `timeStart=\`${new Date(Date.now() + 3600 * 1000 * 24).toUTCString()}\`),`
 );
 const question = (questionText: string) =>
   new Promise<string>((resolve) => rl.question(questionText, resolve));

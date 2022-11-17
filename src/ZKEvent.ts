@@ -62,6 +62,7 @@ export class ZKEvent extends SmartContract {
   @state(UInt32) maxTickets = State<UInt32>();
   @state(UInt32) maxTicketsPerAccount = State<UInt32>();
   @state(PublicKey) owner = State<PublicKey>();
+  @state(UInt64) startTime = State<UInt64>();
 
   deploy(args: DeployArgs) {
     super.deploy(args);
@@ -74,6 +75,7 @@ export class ZKEvent extends SmartContract {
     this.ticketsClaimed.set(UInt32.from(0));
     this.maxTickets.set(UInt32.from(0));
     this.owner.set(PublicKey.empty());
+    this.startTime.set(UInt64.from(0));
   }
 
   @method
@@ -81,6 +83,7 @@ export class ZKEvent extends SmartContract {
     initialCommitment: Field,
     maxTickets: UInt32,
     maxTicketsPerAccount: UInt32,
+    startTime: UInt64,
     ownerPKey: PrivateKey
   ) {
     // check if event has already been setup
@@ -88,10 +91,16 @@ export class ZKEvent extends SmartContract {
     this.owner.assertEquals(owner);
     owner.assertEquals(PublicKey.empty());
 
+    // check that event has not started
+    let timeNow = this.network.timestamp.get();
+    this.network.timestamp.assertEquals(timeNow);
+    timeNow.assertLt(startTime);
+
     // setup
     this.commitment.set(initialCommitment);
     this.maxTickets.set(maxTickets);
     this.maxTicketsPerAccount.set(maxTicketsPerAccount);
+    this.startTime.set(startTime);
 
     // update state
     this.owner.set(ownerPKey.toPublicKey());
@@ -111,6 +120,15 @@ export class ZKEvent extends SmartContract {
 
     let maxTicketsPerAccount = this.maxTicketsPerAccount.get();
     this.maxTicketsPerAccount.assertEquals(maxTicketsPerAccount);
+
+    let startTime = this.startTime.get();
+    this.startTime.assertEquals(startTime);
+
+    let timeNow = this.network.timestamp.get();
+    this.network.timestamp.assertEquals(timeNow);
+
+    // check that event has not started
+    timeNow.assertLt(startTime);
 
     // check that msg.sender is the owner of the account
     privateKey.toPublicKey().assertEquals(account.publicKey);
@@ -150,6 +168,15 @@ export class ZKEvent extends SmartContract {
 
     let maxTicketsPerAccount = this.maxTicketsPerAccount.get();
     this.maxTicketsPerAccount.assertEquals(maxTicketsPerAccount);
+
+    let startTime = this.startTime.get();
+    this.startTime.assertEquals(startTime);
+
+    let timeNow = this.network.timestamp.get();
+    this.network.timestamp.assertEquals(timeNow);
+
+    // check that event has not started
+    timeNow.assertLt(startTime);
 
     // check that msg.sender is the owner of the account
     privateKey.toPublicKey().assertEquals(from.publicKey);
