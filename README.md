@@ -28,11 +28,11 @@ The zkApp also generates a ticket QR code containing data that can be used to pr
 - [x] More concise tests
 - [x] Whitelist modifiable by owner
 - [x] Add timestamp check on claim and transfer
+- [x] QR code with less identifiable data
 
 ### V2
 
 - [ ] Hide more data
-- [ ] QR code with less identifiable data
 - [ ] Create verifier program to run at the event
 - [ ] Frontend
 

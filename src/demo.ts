@@ -2,10 +2,12 @@ import { ZKEvent, Account, whitelistSize, initialBalance } from './ZKEvent';
 import {
   isReady,
   shutdown,
+  PublicKey,
   PrivateKey,
   Mina,
   UInt32,
   UInt64,
+  Field,
   AccountUpdate,
   MerkleTree,
   MerkleWitness,
@@ -160,15 +162,7 @@ async function claimTicket(name: Names, index: bigint) {
   account.tickets = account.tickets.add(1);
   let accHash = account.hash();
   Tree.setLeaf(index, accHash);
-  if (doQr) {
-    QRCode.toString(
-      account.publicKey.toBase58(),
-      { type: 'terminal' },
-      function (err, url) {
-        console.log(url);
-      }
-    );
-  }
+  await generateQr(zkappKey.toPublicKey(), accHash, index);
   zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
 }
 
@@ -217,26 +211,37 @@ async function sendTicket(
   fromAccount.transferred = fromAccount.transferred.add(1);
   toAccount.tickets = toAccount.tickets.add(1);
   Tree.setLeaf(indexTo, toAccount.hash());
+  await generateQr(zkappKey.toPublicKey(), toAccount.hash(), indexTo);
+  zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
+}
+
+async function generateQr(event: PublicKey, hash: Field, index: BigInt) {
+  const data = {
+    event: event.toString(),
+    index: index.toString(),
+    hash: hash.toString(),
+  };
   if (doQr) {
     QRCode.toString(
-      toAccount.publicKey.toBase58(),
+      JSON.stringify(data),
       { type: 'terminal' },
       function (err, url) {
         console.log(url);
       }
     );
   }
-  zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
 }
 
 async function claimTicketCase() {
+  let alice = Accounts.get('Alice');
   if (
-    Accounts.get('Alice')
-      ?.tickets.equals(UInt32.from(maxNumberOfTicketsPerAccount))
+    alice?.tickets
+      .add(alice.transferred)
+      .equals(UInt32.from(maxNumberOfTicketsPerAccount))
       .toBoolean()
   ) {
     console.log(
-      `❗️You already have the maximum number of tickets allowed per user (${maxNumberOfTicketsPerAccount})`
+      `❗️You already have claimed the maximum number of tickets allowed per user (${maxNumberOfTicketsPerAccount})`
     );
     return;
   }
@@ -250,18 +255,20 @@ async function claimTicketCase() {
 }
 
 async function sendTicketCase() {
+  let bob = Accounts.get('Bob');
   if (Accounts.get('Alice')?.tickets.lt(UInt32.from(1)).toBoolean()) {
     console.log(`❗️You do not have any ticket to give to Bob (0)`);
     return;
   }
 
   if (
-    Accounts.get('Bob')
-      ?.tickets.equals(UInt32.from(maxNumberOfTicketsPerAccount))
+    bob?.tickets
+      .add(bob.transferred)
+      .equals(UInt32.from(maxNumberOfTicketsPerAccount))
       .toBoolean()
   ) {
     console.log(
-      `❗️Bob already has the maximum number of tickets allowed per user (${maxNumberOfTicketsPerAccount})`
+      `❗️Bob already has claimed the maximum number of tickets allowed per user (${maxNumberOfTicketsPerAccount})`
     );
     return;
   }
@@ -284,7 +291,7 @@ async function requestSendTicketCase() {
       .toBoolean()
   ) {
     console.log(
-      `❗️You already have the maximum number of tickets allowed per user (${maxNumberOfTicketsPerAccount})`
+      `❗️You already have claimedthe maximum number of tickets allowed per user (${maxNumberOfTicketsPerAccount})`
     );
     return;
   }
