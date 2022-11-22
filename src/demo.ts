@@ -2,18 +2,16 @@ import { ZKEvent, Account, whitelistSize, initialBalance } from './ZKEvent';
 import {
   isReady,
   shutdown,
-  PublicKey,
   PrivateKey,
   Mina,
   UInt32,
   UInt64,
-  Field,
   AccountUpdate,
   MerkleTree,
   MerkleWitness,
 } from 'snarkyjs';
 
-import QRCode from 'qrcode';
+import { generateQr } from './Common';
 
 import { createInterface } from 'readline';
 
@@ -114,7 +112,8 @@ while (typeof x === 'undefined') {
       '0 - 🎟️  Claim ticket\n' +
       '1 - 💌 Send ticket\n' +
       '2 - ❓ Ask Bob to send you a ticket\n' +
-      '3 - Exit\n' +
+      '3 - ✅ Verify ticket validity\n' +
+      '4 - Exit\n' +
       'Choice: '
   );
   switch (varName) {
@@ -131,6 +130,10 @@ while (typeof x === 'undefined') {
       break;
 
     case '3':
+      await checkValidityCase();
+      break;
+
+    case '4':
       await exitCase();
       break;
 
@@ -160,9 +163,8 @@ async function claimTicket(name: Names, index: bigint) {
 
   // if the transaction was successful, we can update our off-chain storage as well
   account.tickets = account.tickets.add(1);
-  let accHash = account.hash();
-  Tree.setLeaf(index, accHash);
-  await generateQr(zkappKey.toPublicKey(), accHash, index);
+  Tree.setLeaf(index, account.hash());
+  await generateQr(zkappKey.toPublicKey(), account, index, doQr);
   zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
 }
 
@@ -211,25 +213,8 @@ async function sendTicket(
   fromAccount.transferred = fromAccount.transferred.add(1);
   toAccount.tickets = toAccount.tickets.add(1);
   Tree.setLeaf(indexTo, toAccount.hash());
-  await generateQr(zkappKey.toPublicKey(), toAccount.hash(), indexTo);
+  await generateQr(zkappKey.toPublicKey(), toAccount, indexTo, doQr);
   zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
-}
-
-async function generateQr(event: PublicKey, hash: Field, index: BigInt) {
-  const data = {
-    event: event.toString(),
-    index: index.toString(),
-    hash: hash.toString(),
-  };
-  if (doQr) {
-    QRCode.toString(
-      JSON.stringify(data),
-      { type: 'terminal' },
-      function (err, url) {
-        console.log(url);
-      }
-    );
-  }
 }
 
 async function claimTicketCase() {
@@ -291,7 +276,7 @@ async function requestSendTicketCase() {
       .toBoolean()
   ) {
     console.log(
-      `❗️You already have claimedthe maximum number of tickets allowed per user (${maxNumberOfTicketsPerAccount})`
+      `❗️You already have claimed the maximum number of tickets allowed per user (${maxNumberOfTicketsPerAccount})`
     );
     return;
   }
@@ -300,6 +285,28 @@ async function requestSendTicketCase() {
   await sendTicket('Bob', 1n, 'Alice', 0n, 1);
   console.log('Your tickets: ' + Accounts.get('Alice')?.tickets);
   console.log('Bob tickets: ' + Accounts.get('Bob')?.tickets);
+}
+
+async function checkValidityCase() {
+  if (Accounts.get('Alice')?.tickets.lt(UInt32.from(1)).toBoolean()) {
+    console.log(`❗️Sorry, you can't enter the event! (0 tickets)`);
+    return;
+  }
+  const givenAccount = Accounts.get('Alice');
+  const givenIndex = 0n;
+  const treeCopy = Tree;
+  if (givenAccount) {
+    // check user account hashes to merkle tree leaf
+    treeCopy.setLeaf(givenIndex, givenAccount.hash());
+    treeCopy.getRoot().assertEquals(Tree.getRoot());
+    // check computed root equals contract-stored root
+    treeCopy.getRoot().assertEquals(zkAppInstance.commitment.get());
+    console.log(
+      `✅ Congrats, you and (${givenAccount?.tickets.sub(
+        UInt32.from(1)
+      )}) other people can enter the event!`
+    );
+  }
 }
 
 async function exitCase() {

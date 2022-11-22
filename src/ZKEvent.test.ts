@@ -13,7 +13,7 @@ import {
   MerkleTree,
 } from 'snarkyjs';
 
-import QRCode from 'qrcode';
+import { generateQr } from './Common';
 
 type Names = 'Alice' | 'Bob' | 'Carol' | 'Dave';
 
@@ -109,9 +109,8 @@ describe('ZKEvent', () => {
 
     // update off chain storage
     account.tickets = account.tickets.add(1);
-    let accHash = account.hash();
-    Tree.setLeaf(index, accHash);
-    await generateQr(zkAppPrivateKey.toPublicKey(), accHash, 0n);
+    Tree.setLeaf(index, account.hash());
+    await generateQr(zkAppPrivateKey.toPublicKey(), account, 0n, doQr);
 
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
   });
@@ -140,9 +139,8 @@ describe('ZKEvent', () => {
 
     // if the transaction was successful, we can update our off-chain storage as well
     account.tickets = account.tickets.add(1);
-    let accHash = account.hash();
-    Tree.setLeaf(index, accHash);
-    await generateQr(zkAppPrivateKey.toPublicKey(), accHash, 0n);
+    Tree.setLeaf(index, account.hash());
+    await generateQr(zkAppPrivateKey.toPublicKey(), account, 0n, doQr);
 
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
 
@@ -183,7 +181,7 @@ describe('ZKEvent', () => {
     fromAccount.transferred = fromAccount.transferred.add(1);
     toAccount.tickets = toAccount.tickets.add(1);
     Tree.setLeaf(indexTo, toAccount.hash());
-    await generateQr(zkAppPrivateKey.toPublicKey(), accHash, 0n);
+    await generateQr(zkAppPrivateKey.toPublicKey(), toAccount, 0n, doQr);
     // verify update was correct
     zkAppInstance.commitment.get().assertEquals(Tree.getRoot());
   });
@@ -212,14 +210,24 @@ describe('ZKEvent', () => {
 
     // if the transaction was successful, we can update our off-chain storage as well
     account.tickets = account.tickets.add(1);
-    let accHash = account.hash();
-    Tree.setLeaf(index, accHash);
-    await generateQr(zkAppPrivateKey.toPublicKey(), accHash, 0n);
+    Tree.setLeaf(index, account.hash());
+    await generateQr(zkAppPrivateKey.toPublicKey(), account, 0n, doQr);
 
-    // prove account owns a ticket
-    let root = zkAppInstance.commitment.get();
-    root.assertEquals(Tree.getRoot());
+    // PROVE OWNERSHIP OF TICKET(S)
+    // from QR we get event contract address, account data and merkle witness index
+    const givenEventAddress = zkAppPrivateKey.toPublicKey();
+    const givenAccount = account;
+    const givenIndex = 0n;
+    const treeCopy = Tree;
+    // check event address is correct
+    zkAppInstance.address.assertEquals(givenEventAddress);
+    // check user has more than one ticket (or they cant enter the event!)
     account.tickets.assertGte(UInt32.from(1));
+    // check user account hashes to merkle tree leaf
+    treeCopy.setLeaf(givenIndex, givenAccount.hash());
+    treeCopy.getRoot().assertEquals(Tree.getRoot());
+    // check computed root equals contract-stored root
+    treeCopy.getRoot().assertEquals(zkAppInstance.commitment.get());
   });
 });
 
@@ -263,23 +271,6 @@ async function deployZKEvent(
   });
   await sendTx(tx);
   return zkAppInstance;
-}
-
-async function generateQr(event: PublicKey, hash: Field, index: BigInt) {
-  const data = {
-    event: event.toString(),
-    index: index.toString(),
-    hash: hash.toString(),
-  };
-  if (doQr) {
-    QRCode.toString(
-      JSON.stringify(data),
-      { type: 'terminal' },
-      function (err, url) {
-        console.log(url);
-      }
-    );
-  }
 }
 
 async function claimTicket(
